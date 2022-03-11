@@ -11,10 +11,12 @@ CONFIG += c++11
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
+    timehelper.cpp \
     worktimetracker.cpp
 
 HEADERS += \
     mainwindow.h \
+    timehelper.h \
     worktimetracker.h
 
 FORMS += \

@@ -15,6 +15,11 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+private slots:
+    void on_worktimeBtn_clicked();
+    void on_leavepassBtn_clicked();
+    void on_scheduleBtn_clicked();
+
 private:
     Ui::MainWindow *ui;
 };

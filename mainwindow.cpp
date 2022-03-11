@@ -34,3 +34,33 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::on_worktimeBtn_clicked()
+{
+    auto model = new QSqlTableModel(this);
+    model->setTable("worktime");
+    model->select();
+
+    ui->tableView->setModel(model);
+    ui->tableView->resizeColumnsToContents();
+}
+
+void MainWindow::on_leavepassBtn_clicked()
+{
+    auto model = new QSqlTableModel(this);
+    model->setTable("leavepass");
+    model->select();
+
+    ui->tableView->setModel(model);
+    ui->tableView->resizeColumnsToContents();
+}
+
+void MainWindow::on_scheduleBtn_clicked()
+{
+    auto model = new QSqlTableModel(this);
+    model->setTable("schedule");
+    model->select();
+
+    ui->tableView->setModel(model);
+    ui->tableView->resizeColumnsToContents();
+}
+

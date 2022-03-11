@@ -3,25 +3,36 @@
 
 #include <QSqlDatabase>
 #include <QDateTime>
+#include "timehelper.h"
 
 class WorktimeTracker
 {
 public:
+    struct Schedule;
+    struct LeavePass;
+    struct Worktime;
+
     WorktimeTracker(const QSqlDatabase& db);
 
-    QTime getTimeSummary(int month);
+    TimeSpan getSummary(const QDate& from, const QDate& to) const;
+    TimeSpan getSummary(int month, int year = -1);
 
     bool insertDate(const QDate& date,
-                    const QTime& scheduleBegin,
-                    const QTime& scheduleEnd,
                     const QTime& arrival,
-                    const QTime& leaving);
+                    const QTime& leaving,
+                    const QString& schedule = "default");
     bool insertDate(const QDate& date);
 
-    bool setSchedule(const QTime& start, const QTime& end, const QDate& from, const QDate& to = QDate());
+
+    Schedule getScheduleBeforeDate(const QDate& date) const;
+    Schedule getSchedule(const QString& type) const;
+    bool setSchedule(const QString& schedule, const QDate& from, const QDate& to = QDate());
+    bool insertSchedule(const QString& schedule, const QTime& begin, const QTime& end);
+
     bool setArrivalTime(const QTime& time = QTime(), const QDate& from = QDate(), const QDate& to = QDate());
     bool setLeavingTime(const QTime& time = QTime(), const QDate& from = QDate(), const QDate& to = QDate());
 
+    QList<LeavePass> getLeavePassList(const QDate& date) const;
     bool insertLeavePass(const QTime& from, const QTime& to, const QDate& date = QDate(), const QString& comment = QString());
     bool setLeavePassBegin(const QTime& time, const QDate& date = QDate(), int id = 0);
     bool setLeavePassEnd(const QTime& time, const QDate& date = QDate(), int id = 0);
@@ -53,16 +64,40 @@ private:
     bool updateColumnData(const QString &table, const QString& column, const QDate &from, const QDate& to, const QString &data) const;
     bool updateLeavePassData(const QString& column, const QDate& date, int id, const QString& data) const;
 
-    struct Schedule {
-        QTime begin;
-        QTime end;
-        inline bool isValid() const { return begin.isValid() && end.isValid(); }
-    };
-
-    Schedule getScheduleBeforeDate(const QDate& date) const;
-    Schedule getSchedule(const QString& type) const;
-
     void test();
+};
+
+struct WorktimeTracker::Schedule
+{
+    QString name;
+    QTime begin;
+    QTime end;
+
+    bool isValid() const;
+    QString toString() const;
+};
+
+struct WorktimeTracker::LeavePass
+{
+    QDate date;
+    int   id;
+    QTime from;
+    QTime to;
+    QString comment;
+
+    bool isValid() const;
+    QString toString() const;
+};
+
+struct WorktimeTracker::Worktime
+{
+    QDate date;
+    Schedule schedule;
+    QTime arrivalTime;
+    QTime leavingTime;
+
+    bool isValid() const;
+    QString toString() const;
 };
 
 #endif // WORKTIMETRACKER_H
