@@ -6,22 +6,26 @@
 #include <QDebug>
 #include <QSqlRecord>
 
-WorktimeTracker::WorktimeTracker(const QSqlDatabase &db)
+WorktimeTracker::WorktimeTracker(const QSqlDatabase &db, const QTime &scheduleBegin, const QTime &scheduleEnd)
     : m_db(db)
 {
-    Q_ASSERT(m_db.isOpen());
+    // TODO: Using Q_ASSERT for checking db and time is not safe. It'd be better to hide constructor
+    // in private/protected area and create WorktimeTracker instances via static method like
+    // WorktimeTracker::create()
 
-    QSqlQuery query(m_db);
+    Q_ASSERT(m_db.isOpen() && scheduleBegin.isValid() && scheduleEnd.isValid());
+
+    m_defaultSchedule = { DEFAULT_SCHEDULE_NAME, scheduleBegin, scheduleEnd };
 
     initScheduleTable();
     initLeavepassTable();
     initWorktimeTable();
-
-    test();
 }
 
 TimeSpan WorktimeTracker::getSummary(const QDate &from, const QDate &to) const
 {
+    return TimeSpan();
+
 //    if (!from.isValid() || !to.isValid())
 //        return TimeSpan();
 
@@ -73,11 +77,74 @@ TimeSpan WorktimeTracker::getSummary(int month, int year)
     return getSummary(monthStart, monthEnd);
 }
 
-bool WorktimeTracker::insertDate(const QDate &date, const QTime &arrival, const QTime &leaving, const QString &schedule)
+WorktimeTracker::Record WorktimeTracker::getRecord(const QDate &date) const
 {
-    // TODO: arrival must be lower than leaving
+    if (!date.isValid())
+        return Record();
 
+    QSqlQuery query(m_db);
+    query.prepare("SELECT * FROM worktime WHERE Date = date(:d)");
+    query.bindValue(":d", dateToString(date));
+
+    if (!execQueryVerbosely(&query))
+        return Record();
+
+    if (!query.next())
+        return Record();
+
+    Record r;
+    r.schedule = getSchedule(query.value("Schedule").toString());
+    r.date = query.value("Date").toDate();
+    r.arrivalTime = query.value("ArrivalTime").toTime();
+    r.leavingTime = query.value("LeavingTime").toTime();
+
+    return r;
+}
+
+QList<WorktimeTracker::Record> WorktimeTracker::getRecords(const QDate &from, const QDate &to) const
+{
+    if (!from.isValid() || !to.isValid())
+        return QList<Record>();
+
+    if (from == to)
+        return QList<Record>({getRecord(from)});
+
+    QDate _from = qMin(from, to);
+    QDate _to   = qMax(from, to);
+
+    QSqlQuery query(m_db);
+    query.prepare(QString("SELECT * FROM worktime WHERE Date BETWEEN date(:from) AND date(:to)"));
+    query.bindValue(":from", dateToString(_from));
+    query.bindValue(":to", dateToString(_to));
+
+    if (!execQueryVerbosely(&query))
+        return QList<Record>();
+
+    QList<Record> records;
+
+    while (query.next())
+    {
+        Record r;
+        r.schedule = getSchedule(query.value("Schedule").toString());
+        r.date = query.value("Date").toDate();
+        r.arrivalTime = query.value("ArrivalTime").toTime();
+        r.leavingTime = query.value("LeavingTime").toTime();
+        records.append(r);
+    }
+
+    return records;
+}
+
+bool WorktimeTracker::insertRecord(const QDate &date, const QTime &arrival, const QTime &leaving, const QString &schedule)
+{
     if (schedule.isEmpty() || !date.isValid())
+        return false;
+
+    // If there is no schedule with this name
+    if (schedule != defaultSchedule().name && !getSchedule(schedule).isValid())
+        return false;
+
+    if (!TimeRange::valid(arrival, leaving) || TimeRange::inverted(arrival, leaving))
         return false;
 
     QSqlQuery query(m_db);
@@ -90,14 +157,13 @@ bool WorktimeTracker::insertDate(const QDate &date, const QTime &arrival, const 
     return execQueryVerbosely(&query);
 }
 
-bool WorktimeTracker::insertDate(const QDate &date)
+bool WorktimeTracker::insertRecord(const QDate &date)
 {
     Schedule schedule = getScheduleBeforeDate(date);
+    if (!schedule.isValid())
+        schedule = defaultSchedule();
 
-    if (schedule.isValid())
-        return insertDate(date, QTime(), QTime(), schedule.name);
-
-    return insertDate(date, QTime(), QTime());
+    return insertRecord(date, schedule.begin, schedule.end, schedule.name);
 }
 
 bool WorktimeTracker::setSchedule(const QString &schedule, const QDate &from, const QDate &to)
@@ -115,7 +181,7 @@ bool WorktimeTracker::insertSchedule(const QString &schedule, const QTime &begin
 {
     // TODO: begin must be lower than end
 
-    if (schedule.isEmpty() || !begin.isValid() || !end.isValid())
+    if (schedule.isEmpty() || !TimeRange::valid(begin, end) || TimeRange::inverted(begin, end))
         return false;
 
     QSqlQuery query(m_db);
@@ -127,14 +193,19 @@ bool WorktimeTracker::insertSchedule(const QString &schedule, const QTime &begin
     return execQueryVerbosely(&query);
 }
 
+
 bool WorktimeTracker::setArrivalTime(const QTime &time, const QDate &from, const QDate &to)
 {
-    // TODO: time must be lower than LeavingTime
-
     auto _time = time.isValid() ? time : QTime::currentTime();
     auto _from = from.isValid() ? from : QDate::currentDate();
     auto _to   = to.isValid() ? to : _from;
-    return updateColumnData("worktime", "ArrivalTime", _from, _to, timeToString(_time));
+
+    return updateColumnData("worktime",
+                            "ArrivalTime",
+                            _from,
+                            _to,
+                            timeToString(_time),
+                            "LeavingTime >= time(:data)");
 }
 
 bool WorktimeTracker::setLeavingTime(const QTime &time, const QDate &from, const QDate &to)
@@ -144,7 +215,13 @@ bool WorktimeTracker::setLeavingTime(const QTime &time, const QDate &from, const
     auto _time = time.isValid() ? time : QTime::currentTime();
     auto _from = from.isValid() ? from : QDate::currentDate();
     auto _to   = to.isValid() ? to : _from;
-    return updateColumnData("worktime", "LeavingTime", _from, _to, timeToString(_time));
+
+    return updateColumnData("worktime",
+                            "LeavingTime",
+                            _from,
+                            _to,
+                            timeToString(_time),
+                            "ArrivalTime <= time(:data)");
 }
 
 QList<WorktimeTracker::LeavePass> WorktimeTracker::getLeavePassList(const QDate &date) const
@@ -175,6 +252,11 @@ QList<WorktimeTracker::LeavePass> WorktimeTracker::getLeavePassList(const QDate 
 
 bool WorktimeTracker::insertLeavePass(const QTime &from, const QTime &to, const QDate &date, const QString &comment)
 {
+    // TODO: return false if there's already a leave pass with the same time
+
+    // insertLeavePass(QTime(8,0), QTime(8,10)); -> return true
+    // insertLeavePass(QTime(8,0), QTime(8,10)); -> return false
+
     if (!from.isValid() || !to.isValid())
         return false;
 
@@ -220,7 +302,7 @@ bool WorktimeTracker::setLeavePassBegin(const QTime &time, const QDate &date, in
 
     auto _time = time.isValid() ? time : QTime::currentTime();
     auto _date = date.isValid() ? date : QDate::currentDate();
-    return updateLeavePassData("TimeFrom", _date, id, timeToString(_time));
+    return updateLeavePassData("TimeFrom", _date, id, timeToString(_time), "TimeTo >= time(:data)");
 }
 
 bool WorktimeTracker::setLeavePassEnd(const QTime &time, const QDate &date, int id)
@@ -229,13 +311,18 @@ bool WorktimeTracker::setLeavePassEnd(const QTime &time, const QDate &date, int 
 
     auto _time = time.isValid() ? time : QTime::currentTime();
     auto _date = date.isValid() ? date : QDate::currentDate();
-    return updateLeavePassData("TimeTo", _date, id, timeToString(_time));
+    return updateLeavePassData("TimeTo", _date, id, timeToString(_time), "TimeFrom <= time(:data)");
 }
 
 bool WorktimeTracker::setLeavePassComment(const QString &comment, const QDate &date, int id)
 {
     auto _date = date.isValid() ? date : QDate::currentDate();
     return updateLeavePassData("Comment", _date, id, comment);
+}
+
+WorktimeTracker::Schedule WorktimeTracker::defaultSchedule() const
+{
+    return m_defaultSchedule;
 }
 
 void WorktimeTracker::initWorktimeTable()
@@ -266,6 +353,7 @@ void WorktimeTracker::initLeavepassTable()
 
 void WorktimeTracker::initScheduleTable()
 {
+
     QSqlQuery query(m_db);
 
     execQueryVerbosely(&query, "CREATE TABLE schedule ("
@@ -274,43 +362,35 @@ void WorktimeTracker::initScheduleTable()
                                "    End TEXT"
                                ")");
 
-    query.prepare("INSERT INTO schedule VALUES('default',:begin,:end)");
-    query.bindValue(":begin", timeToString(QTime(8, 0)));  // 08:00
-    query.bindValue(":end", timeToString(QTime(17, 0))); // 17:00
+    query.prepare("INSERT INTO schedule VALUES(:name,:begin,:end)");
+    query.bindValue(":name", m_defaultSchedule.name);
+    query.bindValue(":begin", timeToString(m_defaultSchedule.begin));
+    query.bindValue(":end", timeToString(m_defaultSchedule.end));
     execQueryVerbosely(&query);
 
-    query.prepare("INSERT INTO schedule VALUES('floating_first_hour',:begin,:end)");
-    query.bindValue(":begin", timeToString(QTime(8, 0)));  // 08:00
-    query.bindValue(":end", timeToString(QTime(17, 0))); // 17:00
-    execQueryVerbosely(&query);
+//    query.prepare("INSERT INTO schedule VALUES('floating_first_hour',:begin,:end)");
+//    query.bindValue(":begin", timeToString(scheduleBegin));
+//    query.bindValue(":end", timeToString(scheduleEnd));
+    //    execQueryVerbosely(&query);
 }
 
-bool WorktimeTracker::execQueryVerbosely(QSqlQuery *q, const QString &cmd) const
-{
-    if (!q)
-        return false;
-
-    bool result = (cmd.isEmpty()) ? q->exec() : q->exec(cmd);
-
-    if (q->lastError().isValid())
-        qDebug() << "-----\nQuery:" << q->executedQuery()
-                 << "\nBounds:" << q->boundValues()
-                 << "\nError:" << q->lastError().text()
-                 << "\n-----";
-
-    return result;
-}
-
-bool WorktimeTracker::updateColumnData(const QString &table, const QString &column, const QDate &from, const QDate &to, const QString& data) const
+bool WorktimeTracker::updateColumnData(const QString &table, const QString &column, const QDate &from, const QDate &to, const QString& data, const QString &additionalCondition) const
 {
     if (!from.isValid() && !to.isValid())
         return false;
 
     QSqlQuery query(m_db);
 
-    query.prepare(QString("UPDATE %1 SET %2=:data WHERE Date BETWEEN date(:from) AND date(:to)").arg(table).arg(column));
-    query.bindValue(":from", dateToString(from));
-    query.bindValue(":to", dateToString(to));
+    // Swap if from > to
+    QDate _from = qMin(from, to);
+    QDate _to   = qMax(from, to);
+
+    QString queryText = "UPDATE %1 SET %2=:data WHERE Date BETWEEN date(:from) AND date(:to)";
+    if (!additionalCondition.isEmpty()) queryText += " AND %3";
+
+    query.prepare(queryText.arg(table).arg(column).arg(additionalCondition));
+    query.bindValue(":from", dateToString(_from));
+    query.bindValue(":to", dateToString(_to));
     query.bindValue(":data", data);
 
     if (!execQueryVerbosely(&query))
@@ -321,14 +401,17 @@ bool WorktimeTracker::updateColumnData(const QString &table, const QString &colu
     return query.next() ? query.value(0).toBool() : false;
 }
 
-bool WorktimeTracker::updateLeavePassData(const QString &column, const QDate &date, int id, const QString &data) const
+bool WorktimeTracker::updateLeavePassData(const QString &column, const QDate &date, int id, const QString &data, const QString &additionalCondition) const
 {
     if (!date.isValid())
         return false;
 
     QSqlQuery query(m_db);
 
-    query.prepare(QString("UPDATE leavepass SET %2=:data WHERE Date = date(:d) AND Id = :id").arg(column));
+    QString queryText = "UPDATE leavepass SET %2=:data WHERE Date = date(:d) AND Id = :id";
+    if (!additionalCondition.isEmpty()) queryText += " AND %3";
+
+    query.prepare(queryText.arg(column).arg(additionalCondition));
     query.bindValue(":d", dateToString(date));
     query.bindValue(":id", QString::number(id));
     query.bindValue(":data", data);
@@ -358,70 +441,6 @@ WorktimeTracker::Schedule WorktimeTracker::getSchedule(const QString &name) cons
     s.begin = stringToTime(query.value("Begin").toString());
     s.end = stringToTime(query.value("End").toString());
     return s;
-}
-
-void WorktimeTracker::test()
-{
-    QSqlQuery query(m_db);
-
-    insertSchedule("testschedule1", QTime(5, 25), QTime(9, 49));
-
-    insertDate(QDate(2022, 01, 18), QTime(8, 0), QTime(17, 0));
-
-    for (int i = 1; i < 60; i++)
-        insertDate(QDate(2022, 01, 18).addDays(i), QTime(8, 0), QTime(17, 0));
-
-    insertDate(QDate(2022, 01, 18).addDays(60), QTime(8, 0), QTime(17, 0));
-
-    // ---------- Test summary --------------------
-
-    qDebug() << "1" << insertLeavePass(QTime(10, 0), QTime(10, 15), QDate(2022, 01, 19), "lp0")
-             << insertLeavePass(QTime(10, 25), QTime(10, 40), QDate(2022, 01, 19), "lp1")
-             << insertLeavePass(QTime(10, 55), QTime(10, 45), QDate(2022, 01, 19), "lpf")
-             << insertLeavePass(QTime(8, 0), QTime(9, 35), QDate(2022, 02, 20), "lp2")
-             << insertLeavePass(QTime(16, 20), QTime(17, 00), QDate(2022, 03, 15), "lp3");
-
-    TimeSpan ts1 = getSummary(1);
-    TimeSpan ts2 = getSummary(2);
-    TimeSpan ts3 = getSummary(3);/*getSummary(QDate(2022, 01, 18), QDate(2022, 03, 19));*/
-
-    qDebug() << "2" << ts1.hours() << ts1.minutes();
-    qDebug() << "3" << ts2.hours() << ts2.minutes();
-    qDebug() << "4" << ts3.hours() << ts3.minutes();
-
-    QTime t1(8, 00);
-    QTime t2(8, 25);
-    QTime t3(8, 50);
-    QTime t4(8, 55);
-
-    auto u = TimeRange::getUnion({t1, t2}, {t3, t4});
-    for (auto r : u) qDebug() << r.toString();
-
-
-    // ---------- Test functions --------------------
-
-//    auto s1 = getScheduleBeforeDate(QDate(2022, 01, 19));
-//    auto s2 = getScheduleBeforeDate(QDate(2022, 01, 20));
-
-//    qDebug() << "1" << s1.begin << s1.end << s2.begin << s2.end;
-
-//    qDebug() << "2" << insertDate(QDate::currentDate()) << insertDate(QDate(1996, 11, 26));
-
-//    qDebug() << "3" << setArrivalTime() << setArrivalTime(QTime(15, 00), QDate(2022, 01, 20)) << setArrivalTime(QTime(15, 20), QDate(2055, 11, 23));
-//    qDebug() << "4" << setLeavingTime() << setLeavingTime(QTime(15, 00), QDate(2022, 01, 20));
-
-//    qDebug() << "5" << setSchedule("testschedule1", QDate(2022, 01, 20), QDate(2022, 01, 25));
-
-//    qDebug() << "6" << insertLeavePass(QTime(10, 0), QTime(10, 30))
-//             << insertLeavePass(QTime(10, 40), QTime(10, 50))
-//             << insertLeavePass(QTime(10, 40), QTime(11, 40), QDate(1996, 11, 26), "comment");
-
-//    qDebug() << "7" << setLeavePassBegin(QTime(15, 35))
-//             << setLeavePassEnd(QTime(12, 0), QDate::currentDate(), 1)
-//             << setLeavePassComment("no comments");
-
-
-
 }
 
 WorktimeTracker::Schedule WorktimeTracker::getScheduleBeforeDate(const QDate &date) const
@@ -466,12 +485,12 @@ QString WorktimeTracker::LeavePass::toString() const
             .arg(comment);
 }
 
-bool WorktimeTracker::Worktime::isValid() const
+bool WorktimeTracker::Record::isValid() const
 {
     return date.isValid() && schedule.isValid() && arrivalTime.isValid() && leavingTime.isValid();
 }
 
-QString WorktimeTracker::Worktime::toString() const
+QString WorktimeTracker::Record::toString() const
 {
     return QString("worktime date=%1, schedule={%2}, arrivalTime=%3, leavingTime=%4")
             .arg(date.toString())

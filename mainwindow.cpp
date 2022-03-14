@@ -7,6 +7,7 @@
 #include <QSqlError>
 #include <QDateTime>
 #include "worktimetracker.h"
+#include "testworktimetracker.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -19,7 +20,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     Q_ASSERT(db.open());
 
-    WorktimeTracker wt(db);
+    WorktimeTracker wt = TestWorktimeTracker::example(db);
 
     auto model = new QSqlTableModel(this);
     model->setTable("worktime");
