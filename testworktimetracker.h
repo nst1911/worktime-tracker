@@ -34,6 +34,8 @@ private slots:
     void setLeavePassBegin();
     void setLeavePassEnd();
     void setLeavePassComment();
+    void getSummary();
+    void getSummary_leavepass();
 
 private:
     QSqlDatabase createDb() const;

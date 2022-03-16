@@ -5,15 +5,6 @@
 #include <QTime>
 #include <QSqlQuery>
 
-struct TimeSpan
-{
-    qint64 seconds = 0;
-
-    int hours() const;
-    int minutes() const;
-    QString toString() const;
-};
-
 struct TimeRange
 {
     TimeRange();
@@ -48,6 +39,20 @@ inline bool operator==(const TimeRange& r1, const TimeRange& r2) {
 inline uint qHash(const TimeRange& r, uint seed) {
     return qHash(r.begin, seed) ^ qHash(r.end, seed);
 }
+
+struct TimeSpan
+{
+    TimeSpan();
+    TimeSpan(const TimeRange &range);
+    TimeSpan(const QTime& begin, const QTime& end);
+    TimeSpan(qint64 seconds);
+
+    qint64 seconds = 0;
+
+    int hours() const;
+    int minutes() const;
+    QString toString() const;
+};
 
 bool execQueryVerbosely(QSqlQuery* q, const QString& cmd = QString());
 

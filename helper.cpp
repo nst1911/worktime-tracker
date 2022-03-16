@@ -4,6 +4,29 @@
 #include <set>
 #include <algorithm>
 
+TimeSpan::TimeSpan()
+{
+
+}
+
+TimeSpan::TimeSpan(const TimeRange& range)
+    : TimeSpan(range.begin, range.end)
+{
+
+}
+
+TimeSpan::TimeSpan(const QTime &begin, const QTime &end)
+    : TimeSpan((end.msecsSinceStartOfDay() - begin.msecsSinceStartOfDay()) / 1000)
+{
+
+}
+
+TimeSpan::TimeSpan(qint64 _seconds)
+    : seconds(_seconds)
+{
+
+}
+
 int TimeSpan::hours() const
 {
     int h = qAbs(seconds) / 3600;

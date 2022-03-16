@@ -24,13 +24,19 @@ WorktimeTracker::WorktimeTracker(const QSqlDatabase &db, const QTime &scheduleBe
 
 TimeSpan WorktimeTracker::getSummary(const QDate &from, const QDate &to) const
 {
-    if (!from.isValid() || !to.isValid())
+    if (!from.isValid())
         return TimeSpan();
+
+    auto _from = from;
+    auto _to   = to.isValid() ? to : _from; // if 'to' is invalid, to = from
+
+    if (_from > _to)
+        qSwap(_from, _to);
 
     QSqlQuery query(m_db);
     query.prepare("SELECT * FROM worktime WHERE Date BETWEEN date(:from) AND date(:to)");
-    query.bindValue(":from", dateToString(from));
-    query.bindValue(":to", dateToString(to));
+    query.bindValue(":from", dateToString(_from));
+    query.bindValue(":to", dateToString(_to));
 
     if (!execQueryVerbosely(&query))
         return TimeSpan();
@@ -39,33 +45,51 @@ TimeSpan WorktimeTracker::getSummary(const QDate &from, const QDate &to) const
 
     while (query.next())
     {
-//        auto date = query.value("Date").toDate();
+        auto date = query.value("Date").toDate();
 
-//        auto schedule = getSchedule(query.value("Schedule").toString());
-//        if (!schedule.isValid())
-//            return TimeSpan();
+        qDebug() << date;
 
-//        QList<TimeRange> debtList, bonusList;
+        auto schedule = getSchedule(query.value("Schedule").toString());
+        if (!schedule.isValid())
+            return TimeSpan();
 
-//        auto arrivalTime = query.value("ArrivalTime").toTime();
-//        auto leavingTime = query.value("LeavingTime").toTime();
+        QList<TimeRange> debtList;
+        QList<TimeRange> overtimeList;
 
-//        if (arrivalTime > schedule.begin)
-//            debtList.append(TimeRange(schedule.begin, arrivalTime));
-//        else
-//            bonusList.append(TimeRange(arrivalTime, schedule.begin));
+        // Fill debt and overtime lists by calculating arrival/leaving time
 
-//        if (schedule.end > leavingTime)
-//            debtList.append(TimeRange(leavingTime, schedule.end));
-//        else
-//            bonusList.append(TimeRange(schedule.end, leavingTime));
+        // TODO: exclude lunch time
 
-//        auto leavePasses = getLeavePassList(date);
-//        for (auto leavePass : leavePasses)
-//            debtList.append(TimeRange(leavePass.from, leavePass.to));
+        auto arrivalTime = query.value("ArrivalTime").toTime();
 
-//        for (auto debt : debtList)
+        if (arrivalTime > schedule.begin)
+            debtList.append(TimeRange(schedule.begin, arrivalTime));
+        else
+            overtimeList.append(TimeRange(arrivalTime, schedule.begin));
 
+        auto leavingTime = query.value("LeavingTime").toTime();
+
+        if (schedule.end > leavingTime)
+            debtList.append(TimeRange(leavingTime, schedule.end));
+        else
+            overtimeList.append(TimeRange(schedule.end, leavingTime));
+
+        // Fill debt and overtime lists by calculating leave passes
+
+        auto leavePasses = getLeavePassList(date);
+        for (auto leavePass : leavePasses)
+            debtList.append(TimeRange(leavePass.from, leavePass.to));
+
+        // Time ranges can overlap each other so they have to
+        // be merged by unite()
+        debtList = TimeRange::unite(debtList);
+        overtimeList = TimeRange::unite(overtimeList);
+
+        for (auto debt : debtList)
+            ts.seconds -= TimeSpan(debt).seconds;
+
+        for (auto overtime : overtimeList)
+            ts.seconds += TimeSpan(overtime).seconds;
     }
 
     return ts;
@@ -203,7 +227,9 @@ bool WorktimeTracker::insertSchedule(const QString &schedule, const QTime &begin
 
 bool WorktimeTracker::setArrivalTime(const QTime &time, const QDate &from, const QDate &to)
 {
-    auto _time = time.isValid() ? time : QTime::currentTime();
+    if (!time.isValid())
+        return false;
+
     auto _from = from.isValid() ? from : QDate::currentDate();
     auto _to   = to.isValid() ? to : _from;
 
@@ -211,7 +237,7 @@ bool WorktimeTracker::setArrivalTime(const QTime &time, const QDate &from, const
                             "ArrivalTime",
                             _from,
                             _to,
-                            timeToString(_time),
+                            timeToString(time),
                             "LeavingTime >= time(:data)");
 }
 
@@ -219,7 +245,9 @@ bool WorktimeTracker::setLeavingTime(const QTime &time, const QDate &from, const
 {
     // TODO: time must be higher than ArrivalTime
 
-    auto _time = time.isValid() ? time : QTime::currentTime();
+    if (!time.isValid())
+        return false;
+
     auto _from = from.isValid() ? from : QDate::currentDate();
     auto _to   = to.isValid() ? to : _from;
 
@@ -227,7 +255,7 @@ bool WorktimeTracker::setLeavingTime(const QTime &time, const QDate &from, const
                             "LeavingTime",
                             _from,
                             _to,
-                            timeToString(_time),
+                            timeToString(time),
                             "ArrivalTime <= time(:data)");
 }
 
@@ -259,6 +287,8 @@ QList<WorktimeTracker::LeavePass> WorktimeTracker::getLeavePassList(const QDate 
 
 bool WorktimeTracker::insertLeavePass(const QTime &from, const QTime &to, const QDate &date, const QString &comment)
 {
+    // TODO: constraint from and to with schedule begin and end of this date
+
     // TODO: return false if there's already a leave pass with the same time
 
     // insertLeavePass(QTime(8,0), QTime(8,10)); -> return true
@@ -280,14 +310,6 @@ bool WorktimeTracker::insertLeavePass(const QTime &from, const QTime &to, const 
             bool ok;
             int count = query.value(0).toInt(&ok);
             if (!ok) return false;
-
-            // TODO: Leave pass count is temporary limited with 2 because I don't know how to
-            // implement WorkRange::getUnion() of more than 2 ranges :)
-            if (count >= 2)
-            {
-                qDebug() << "Leave pass count limit == 2";
-                return false;
-            }
 
             query.prepare("INSERT INTO leavepass VALUES (:d, :id, :begin, :end, :comment)");
             query.bindValue(":d", dateToString(_date));

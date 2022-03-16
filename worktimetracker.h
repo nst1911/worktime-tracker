@@ -43,7 +43,7 @@ public:
                     const QTime& scheduleBegin = QTime(8, 0),
                     const QTime& scheduleEnd = QTime(17, 0));
 
-    TimeSpan getSummary(const QDate& from, const QDate& to) const;
+    TimeSpan getSummary(const QDate& from, const QDate& to = QDate()) const;
     TimeSpan getSummary(int month, int year = -1);
 
     Record getRecord(const QDate& date) const;

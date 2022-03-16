@@ -328,6 +328,8 @@ void TestWorktimeTracker::setSchedule()
 
 void TestWorktimeTracker::setArrivalTime()
 {
+    // TODO: test it with custom schedules
+
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
@@ -353,14 +355,8 @@ void TestWorktimeTracker::setArrivalTime()
     QCOMPARE(wt.getRecord(d.addDays(1)).arrivalTime, QTime(11,0));
     QCOMPARE(wt.getRecord(d.addDays(2)).arrivalTime, QTime(11,0));
 
-    // If time is invalid, current time is set.
-    // Record time and next current time always differ, so 100 ms delay would be ok
-
-    // WARNING! IF CURRENT TIME WERE LATER THAN LEAVING TIME,
-    // setArrivalTime() WOULD RETURN FALSE
-
-    QVERIFY(wt.setArrivalTime(QTime(), d));
-    QVERIFY(qAbs(wt.getRecord(d).arrivalTime.secsTo(QTime::currentTime())) < 100);
+    // Invalid time
+    QVERIFY(!wt.setArrivalTime(QTime(), d));
 
     // If date is invalid, current date is set
     QVERIFY(wt.setArrivalTime(QTime(10, 0), QDate()));
@@ -374,6 +370,8 @@ void TestWorktimeTracker::setArrivalTime()
 
 void TestWorktimeTracker::setLeavingTime()
 {
+    // TODO: test it with custom schedules
+
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
@@ -399,14 +397,8 @@ void TestWorktimeTracker::setLeavingTime()
     QCOMPARE(wt.getRecord(d.addDays(1)).leavingTime, QTime(11,0));
     QCOMPARE(wt.getRecord(d.addDays(2)).leavingTime, QTime(11,0));
 
-    // If time is invalid, current time is set.
-    // Record time and next current time always differ, so 100 ms delay would be ok
-
-    // WARNING! IF CURRENT TIME WERE EARLIER THAN ARRIVING TIME,
-    // setLeavingTime() WOULD RETURN FALSE
-
-    QVERIFY(wt.setLeavingTime(QTime(), d));
-    QVERIFY(qAbs(wt.getRecord(d).leavingTime.secsTo(QTime::currentTime())) < 100);
+    // Invalid time
+    QVERIFY(!wt.setLeavingTime(QTime(), d));
 
     // If date is invalid, current date is set
     QVERIFY(wt.setLeavingTime(QTime(10, 0), QDate()));
@@ -476,23 +468,24 @@ void TestWorktimeTracker::getLeavePassList()
 
     wt.insertLeavePass(QTime(10,0), QTime(11,0), d);
     wt.insertLeavePass(QTime(11,0), QTime(12,0), d);
-//    wt.insertLeavePass(QTime(13,0), QTime(14,0), d);
+    wt.insertLeavePass(QTime(13,0), QTime(14,0), d);
 
     auto list = wt.getLeavePassList(d);
-    // QVERIFY(list.size() == 3);
-    QVERIFY(list.size() == 2);
+    QVERIFY(list.size() == 3);
     QCOMPARE(list[0].from, QTime(10, 0));
     QCOMPARE(list[0].to, QTime(11, 0));
     QCOMPARE(list[1].from, QTime(11, 0));
     QCOMPARE(list[1].to, QTime(12, 0));
-//    QCOMPARE(list[2].from, QTime(13, 0));
-//    QCOMPARE(list[2].to, QTime(14, 0));
+    QCOMPARE(list[2].from, QTime(13, 0));
+    QCOMPARE(list[2].to, QTime(14, 0));
 
     clear(&db);
 }
 
 void TestWorktimeTracker::setLeavePassBegin()
 {
+    // TODO: test it with custom schedules
+
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
@@ -518,10 +511,14 @@ void TestWorktimeTracker::setLeavePassBegin()
 
     // Error: Date doesn't exists in table
     QVERIFY(!wt.setLeavePassBegin(QTime(10,10), QDate(2222, 11, 11)));
+
+    clear(&db);
 }
 
 void TestWorktimeTracker::setLeavePassEnd()
 {
+    // TODO: test it with custom schedules
+
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
@@ -547,6 +544,8 @@ void TestWorktimeTracker::setLeavePassEnd()
 
     // Error: Date doesn't exists in table
     QVERIFY(!wt.setLeavePassEnd(QTime(10,10), QDate(2222, 11, 11)));
+
+    clear(&db);
 }
 
 void TestWorktimeTracker::setLeavePassComment()
@@ -569,6 +568,98 @@ void TestWorktimeTracker::setLeavePassComment()
 
     // Error: Date doesn't exists in table
     QVERIFY(!wt.setLeavePassComment("comment4"));
+
+    clear(&db);
+}
+
+void TestWorktimeTracker::getSummary()
+{
+    QSqlDatabase db = createDb();
+    WorktimeTracker wt(db);
+
+    auto scheduleBegin = wt.defaultSchedule().begin;
+    auto scheduleEnd   = wt.defaultSchedule().end;
+
+    constexpr int hourInSec = 60*60;
+
+    auto d = QDate(1996, 01, 01);
+    for (int i = 0; i < 100; ++i)
+        wt.insertRecord(d.addDays(i));
+
+    // -1 hour in January
+    wt.setArrivalTime(scheduleBegin.addSecs(hourInSec), QDate(1996, 1, 1));
+    QCOMPARE(wt.getSummary(1, 1996).seconds, -hourInSec);
+
+    // +1 hour in February
+    wt.setLeavingTime(scheduleEnd.addSecs(hourInSec / 2.0), QDate(1996, 2, 15));
+    wt.setLeavingTime(scheduleEnd.addSecs(hourInSec / 2.0), QDate(1996, 2, 16));
+    QCOMPARE(wt.getSummary(2, 1996).seconds, hourInSec);
+
+    // +0.5 hour at 1996/2/15
+    QCOMPARE(wt.getSummary(QDate(1996, 2, 15), QDate(1996, 2, 15)).seconds, hourInSec / 2.0);
+    QCOMPARE(wt.getSummary(QDate(1996, 2, 15)).seconds, hourInSec / 2.0);
+
+    // -0.5 hour in March
+    wt.setArrivalTime(scheduleBegin.addSecs(hourInSec/2.0), QDate(1996, 3, 8));
+    QCOMPARE(wt.getSummary(3, 1996).seconds, -hourInSec / 2.0);
+
+    // +0.5 hour since 1996/02/10 to 1996/03/10
+    QCOMPARE(wt.getSummary(QDate(1996, 2, 10), QDate(1996, 3, 10)).seconds, hourInSec / 2.0);
+
+    // +0.5 hour since 1996/02/10 to 1996/03/10 (inverted order)
+    QCOMPARE(wt.getSummary(QDate(1996, 3, 10), QDate(1996, 2, 10)).seconds, hourInSec / 2.0);
+
+    // 0 since 1996/02/16 to 1996/02/19
+    QCOMPARE(wt.getSummary(QDate(1996, 2, 16), QDate(1996, 3, 19)).seconds, 0);
+
+    // Custom schedule
+    wt.insertSchedule("custom", QTime(10, 0), QTime(12, 0));
+    wt.setSchedule("custom", QDate(1996, 3, 3), QDate(1996, 3, 4));
+    wt.setArrivalTime(QTime(10, 30), QDate(1996, 3, 3));
+    wt.setLeavingTime(QTime(12, 0), QDate(1996, 3, 3));
+    wt.setArrivalTime(QTime(10, 0), QDate(1996, 3, 4));
+    wt.setLeavingTime(QTime(11, 30), QDate(1996, 3, 4));
+    QCOMPARE(wt.getSummary(3, 1996).seconds, -1.5*hourInSec);
+
+    // May of current year (+1 hour)
+    auto dCurrentYear = QDate(QDate::currentDate().year(), 05, 01);
+    wt.insertRecord(dCurrentYear);
+    wt.setArrivalTime(scheduleBegin.addSecs(-hourInSec), dCurrentYear);
+    QCOMPARE(wt.getSummary(5).seconds, hourInSec);
+
+    clear(&db);
+}
+
+void TestWorktimeTracker::getSummary_leavepass()
+{
+    QSqlDatabase db = createDb();
+    WorktimeTracker wt(db);
+
+    auto scheduleBegin = wt.defaultSchedule().begin;
+    auto scheduleEnd   = wt.defaultSchedule().end;
+
+    constexpr int hourInSec = 60*60;
+
+    auto d = QDate(1996, 01, 01);
+    for (int i = 0; i < 100; ++i)
+        wt.insertRecord(d.addDays(i));
+
+    wt.setArrivalTime(scheduleBegin.addSecs(hourInSec), QDate(1996, 1, 1));
+    wt.setLeavingTime(scheduleEnd.addSecs(hourInSec), QDate(1996, 1, 1));
+    wt.insertLeavePass(QTime(8, 30), QTime(8, 40), QDate(1996, 1, 1));
+    wt.insertLeavePass(QTime(8, 38), QTime(9, 00), QDate(1996, 1, 1));
+    wt.insertLeavePass(QTime(15, 30), QTime(17, 00), QDate(1996, 1, 1));
+    QCOMPARE(wt.getSummary(1, 1996).seconds, -1.5*hourInSec);
+
+    // Custom schedule
+    wt.insertSchedule("custom", QTime(10, 0), QTime(12, 0));
+    wt.setSchedule("custom", QDate(1996, 3, 3));
+    wt.setArrivalTime(QTime(10, 0), QDate(1996, 3, 3));
+    wt.setLeavingTime(QTime(12, 0), QDate(1996, 3, 3));
+    wt.insertLeavePass(QTime(10, 30), QTime(11,0), QDate(1996, 3, 3));
+    QCOMPARE(wt.getSummary(3, 1996).seconds, -0.5*hourInSec);
+
+    clear(&db);
 }
 
 QSqlDatabase TestWorktimeTracker::createDb() const
