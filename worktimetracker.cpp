@@ -24,44 +24,51 @@ WorktimeTracker::WorktimeTracker(const QSqlDatabase &db, const QTime &scheduleBe
 
 TimeSpan WorktimeTracker::getSummary(const QDate &from, const QDate &to) const
 {
-    return TimeSpan();
+    if (!from.isValid() || !to.isValid())
+        return TimeSpan();
 
-//    if (!from.isValid() || !to.isValid())
-//        return TimeSpan();
+    QSqlQuery query(m_db);
+    query.prepare("SELECT * FROM worktime WHERE Date BETWEEN date(:from) AND date(:to)");
+    query.bindValue(":from", dateToString(from));
+    query.bindValue(":to", dateToString(to));
 
-//    QSqlQuery query(m_db);
-//    query.prepare("SELECT * FROM worktime WHERE Date BETWEEN date(:from) AND date(:to)");
-//    query.bindValue(":from", dateToString(from));
-//    query.bindValue(":to", dateToString(to));
+    if (!execQueryVerbosely(&query))
+        return TimeSpan();
 
-//    if (!execQueryVerbosely(&query))
-//        return TimeSpan();
+    TimeSpan ts;
 
-//    TimeSpan ts;
-
-//    while (query.next())
-//    {
-//        auto date = stringToDate(query.value("Date").toString());
+    while (query.next())
+    {
+//        auto date = query.value("Date").toDate();
 
 //        auto schedule = getSchedule(query.value("Schedule").toString());
 //        if (!schedule.isValid())
 //            return TimeSpan();
 
-//        auto arrivalTime = stringToTime(query.value("ArrivalTime").toString());
-//        auto leavingTime = stringToTime(query.value("LeavingTime").toString());
+//        QList<TimeRange> debtList, bonusList;
+
+//        auto arrivalTime = query.value("ArrivalTime").toTime();
+//        auto leavingTime = query.value("LeavingTime").toTime();
+
+//        if (arrivalTime > schedule.begin)
+//            debtList.append(TimeRange(schedule.begin, arrivalTime));
+//        else
+//            bonusList.append(TimeRange(arrivalTime, schedule.begin));
+
+//        if (schedule.end > leavingTime)
+//            debtList.append(TimeRange(leavingTime, schedule.end));
+//        else
+//            bonusList.append(TimeRange(schedule.end, leavingTime));
 
 //        auto leavePasses = getLeavePassList(date);
 //        for (auto leavePass : leavePasses)
-//            ts.seconds -= leavePass.to.secsTo(leavePass.from);
+//            debtList.append(TimeRange(leavePass.from, leavePass.to));
 
-//        if (leavePasses.isEmpty() ? true : arrivalTime < schedule.begin)
-//            ts.seconds += arrivalTime.secsTo(schedule.begin);
+//        for (auto debt : debtList)
 
-//        if (leavePasses.isEmpty() ? true : schedule.end < leavingTime)
-//            ts.seconds += schedule.end.secsTo(leavingTime);
-//    }
+    }
 
-//    return ts;
+    return ts;
 }
 
 TimeSpan WorktimeTracker::getSummary(int month, int year)

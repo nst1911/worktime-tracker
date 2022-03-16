@@ -5,6 +5,12 @@
 #include <QDateTime>
 #include "helper.h"
 
+// TODO:
+// rename:
+// leave pass -> debt
+// arrival time -> check in
+// leaving time -> check out
+
 class WorktimeTracker
 {
 public:

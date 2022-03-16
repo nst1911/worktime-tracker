@@ -22,6 +22,98 @@ WorktimeTracker TestWorktimeTracker::example(const QSqlDatabase &db)
     return wt;
 }
 
+void TestWorktimeTracker::unite()
+{
+    auto r1 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,30, 9,30));
+    QCOMPARE(r1.size(), 1);
+    QCOMPARE(r1[0], TimeRange(8,0, 9,30));
+
+    auto r2 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,10, 9,30));
+    QCOMPARE(r2.size(), 1);
+    QCOMPARE(r2[0], TimeRange(8,0, 9,30));
+
+    auto r3 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,10, 8,20));
+    QCOMPARE(r3.size(), 1);
+    QCOMPARE(r3[0], TimeRange(8,0, 8,30));
+
+    // Inverted order of getUnion parameters
+    auto r3_ = TimeRange::unite(TimeRange(8,10, 8,20), TimeRange(8,0, 8,30));
+    QCOMPARE(r3_.size(), 1);
+    QCOMPARE(r3_[0], TimeRange(8,0, 8,30));
+
+    auto r4 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,45, 9,30));
+    QCOMPARE(r4.size(), 2);
+    QCOMPARE(r4[0], TimeRange(8,0, 8,30));
+    QCOMPARE(r4[1], TimeRange(8,45, 9,30));
+
+    auto r5 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,0, 8,30));
+    QCOMPARE(r5.size(), 1);
+    QCOMPARE(r5[0], TimeRange(8,0, 8,30));
+
+    auto r6 = TimeRange::unite(TimeRange(), TimeRange(8,0, 8,30));
+    QCOMPARE(r6.size(), 1);
+    QCOMPARE(r6[0], TimeRange(8,0, 8,30));
+
+    auto r7 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange());
+    QCOMPARE(r7.size(), 1);
+    QCOMPARE(r7[0], TimeRange(8,0, 8,30));
+
+    auto r8 = TimeRange::unite(TimeRange(), TimeRange());
+    QCOMPARE(r8.size(), 0);
+}
+
+void TestWorktimeTracker::unite_list()
+{
+    auto l1 = QList<TimeRange>();
+    auto r1 = TimeRange::unite(l1);
+    QCOMPARE(r1.size(), 0);
+
+
+    auto l2 = QList<TimeRange>({TimeRange(8,0, 8,30)});
+    auto r2 = TimeRange::unite(l2);
+    QCOMPARE(r2.size(), 1);
+    QCOMPARE(r2[0], TimeRange(8,0, 8,30));
+
+
+    auto l3 = QList<TimeRange>({TimeRange(8,0, 8,30), TimeRange(8,20, 8,40)});
+    auto r3 = TimeRange::unite(l3);
+    QCOMPARE(r3.size(), 1);
+    QCOMPARE(r3[0], TimeRange(8,0, 8,40));
+
+
+    auto l4 = QList<TimeRange>({ TimeRange(8,20, 8,40),
+                                 TimeRange(8,0, 8,30),
+                                 TimeRange(8,35, 8,50) });
+    auto r4 = TimeRange::unite(l4);
+
+    QCOMPARE(r4.size(), 1);
+    QCOMPARE(r4[0], TimeRange(8,0, 8,50));
+
+
+    auto l5 = QList<TimeRange>({ TimeRange(8,0, 8,30),
+                                 TimeRange(8,10, 8,20),
+                                 TimeRange(8,35, 8,50) });
+    auto r5 = TimeRange::unite(l5);
+    QCOMPARE(r5.size(), 2);
+    QCOMPARE(r5[0], TimeRange(8,0, 8,30));
+    QCOMPARE(r5[1], TimeRange(8,35, 8,50));
+
+
+    auto l6 = QList<TimeRange>({ TimeRange(8,0, 8,30),
+                                 TimeRange(8,31, 8,35),
+                                 TimeRange(8,37, 8,50) });
+    auto r6 = TimeRange::unite(l6);
+    QCOMPARE(r6, l6);
+
+
+    auto l7 = QList<TimeRange>({ TimeRange(8,0, 8,30),
+                                 TimeRange(),
+                                 TimeRange(8,25, 8,50) });
+    auto r7 = TimeRange::unite(l7);
+    QCOMPARE(r7.size(), 1);
+    QCOMPARE(r7[0], TimeRange(8,0, 8,50));
+}
+
 void TestWorktimeTracker::insertSchedule()
 {
     QSqlDatabase db = createDb();
