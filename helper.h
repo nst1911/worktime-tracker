@@ -20,12 +20,16 @@ struct TimeRange
     bool isInverted() const;
 
     bool intersects(const TimeRange& range) const;
+    bool contains(const TimeRange& range) const;
 
     static bool inverted(const QTime& begin, const QTime& end);
     static bool inverted(const TimeRange& range);
 
     static bool valid(const QTime& begin, const QTime& end);
     static bool valid(const TimeRange& range);
+
+    static bool intersects(const TimeRange& t1, const TimeRange& t2);
+    static bool contains(const TimeRange& t1, const TimeRange& t2);
 
     static QList<TimeRange> unite(const TimeRange& r1, const TimeRange& r2);
     static QList<TimeRange> unite(const QList<TimeRange>& ranges);

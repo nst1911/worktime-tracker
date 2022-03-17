@@ -4,7 +4,7 @@ WorktimeTracker TestWorktimeTracker::example(const QSqlDatabase &db)
 {
     WorktimeTracker wt(db);
 
-    wt.insertSchedule("testschedule1", QTime(5, 25), QTime(9, 49));
+    wt.insertSchedule("testschedule1", QTime(5, 25), QTime(9, 49), QTime(6,0), QTime(7,0));
 
     wt.insertRecord(QDate(2022, 01, 18), QTime(9, 0), QTime(17, 0));
 
@@ -22,127 +22,54 @@ WorktimeTracker TestWorktimeTracker::example(const QSqlDatabase &db)
     return wt;
 }
 
-void TestWorktimeTracker::unite()
-{
-    auto r1 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,30, 9,30));
-    QCOMPARE(r1.size(), 1);
-    QCOMPARE(r1[0], TimeRange(8,0, 9,30));
-
-    auto r2 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,10, 9,30));
-    QCOMPARE(r2.size(), 1);
-    QCOMPARE(r2[0], TimeRange(8,0, 9,30));
-
-    auto r3 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,10, 8,20));
-    QCOMPARE(r3.size(), 1);
-    QCOMPARE(r3[0], TimeRange(8,0, 8,30));
-
-    // Inverted order of getUnion parameters
-    auto r3_ = TimeRange::unite(TimeRange(8,10, 8,20), TimeRange(8,0, 8,30));
-    QCOMPARE(r3_.size(), 1);
-    QCOMPARE(r3_[0], TimeRange(8,0, 8,30));
-
-    auto r4 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,45, 9,30));
-    QCOMPARE(r4.size(), 2);
-    QCOMPARE(r4[0], TimeRange(8,0, 8,30));
-    QCOMPARE(r4[1], TimeRange(8,45, 9,30));
-
-    auto r5 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange(8,0, 8,30));
-    QCOMPARE(r5.size(), 1);
-    QCOMPARE(r5[0], TimeRange(8,0, 8,30));
-
-    auto r6 = TimeRange::unite(TimeRange(), TimeRange(8,0, 8,30));
-    QCOMPARE(r6.size(), 1);
-    QCOMPARE(r6[0], TimeRange(8,0, 8,30));
-
-    auto r7 = TimeRange::unite(TimeRange(8,0, 8,30), TimeRange());
-    QCOMPARE(r7.size(), 1);
-    QCOMPARE(r7[0], TimeRange(8,0, 8,30));
-
-    auto r8 = TimeRange::unite(TimeRange(), TimeRange());
-    QCOMPARE(r8.size(), 0);
-}
-
-void TestWorktimeTracker::unite_list()
-{
-    auto l1 = QList<TimeRange>();
-    auto r1 = TimeRange::unite(l1);
-    QCOMPARE(r1.size(), 0);
-
-
-    auto l2 = QList<TimeRange>({TimeRange(8,0, 8,30)});
-    auto r2 = TimeRange::unite(l2);
-    QCOMPARE(r2.size(), 1);
-    QCOMPARE(r2[0], TimeRange(8,0, 8,30));
-
-
-    auto l3 = QList<TimeRange>({TimeRange(8,0, 8,30), TimeRange(8,20, 8,40)});
-    auto r3 = TimeRange::unite(l3);
-    QCOMPARE(r3.size(), 1);
-    QCOMPARE(r3[0], TimeRange(8,0, 8,40));
-
-
-    auto l4 = QList<TimeRange>({ TimeRange(8,20, 8,40),
-                                 TimeRange(8,0, 8,30),
-                                 TimeRange(8,35, 8,50) });
-    auto r4 = TimeRange::unite(l4);
-
-    QCOMPARE(r4.size(), 1);
-    QCOMPARE(r4[0], TimeRange(8,0, 8,50));
-
-
-    auto l5 = QList<TimeRange>({ TimeRange(8,0, 8,30),
-                                 TimeRange(8,10, 8,20),
-                                 TimeRange(8,35, 8,50) });
-    auto r5 = TimeRange::unite(l5);
-    QCOMPARE(r5.size(), 2);
-    QCOMPARE(r5[0], TimeRange(8,0, 8,30));
-    QCOMPARE(r5[1], TimeRange(8,35, 8,50));
-
-
-    auto l6 = QList<TimeRange>({ TimeRange(8,0, 8,30),
-                                 TimeRange(8,31, 8,35),
-                                 TimeRange(8,37, 8,50) });
-    auto r6 = TimeRange::unite(l6);
-    QCOMPARE(r6, l6);
-
-
-    auto l7 = QList<TimeRange>({ TimeRange(8,0, 8,30),
-                                 TimeRange(),
-                                 TimeRange(8,25, 8,50) });
-    auto r7 = TimeRange::unite(l7);
-    QCOMPARE(r7.size(), 1);
-    QCOMPARE(r7[0], TimeRange(8,0, 8,50));
-}
-
 void TestWorktimeTracker::insertSchedule()
 {
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
-    QVERIFY(wt.insertSchedule("test1", QTime(9, 0), QTime(11, 0)));
-    QVERIFY(!wt.insertSchedule("test1", QTime(9, 0), QTime(11, 0)));    // Error: The same as previous
-    QVERIFY(!wt.insertSchedule("test2", QTime(12, 0), QTime(11, 0)));   // Error: begin > end
-    QVERIFY(!wt.insertSchedule("test3", QTime(), QTime(10, 0)));        // Error: invalid begin
-    QVERIFY(!wt.insertSchedule("test3", QTime(10, 0), QTime()));        // Error: invalid end
-    QVERIFY(!wt.insertSchedule("test4", QTime(10, 0), QTime(10, 0)));   // Error: begin == end
-    QVERIFY(wt.insertSchedule("test5", QTime(9, 30), QTime(11, 30)));
+    QVERIFY(wt.insertSchedule("test1", QTime(9, 0), QTime(11, 0), QTime(10, 0), QTime(10, 30)));
+    QVERIFY(wt.insertSchedule("test1_1", QTime(9, 30), QTime(11, 30), QTime(10, 30), QTime(11, 00)));
+    // Error: The same as previous
+    QVERIFY(!wt.insertSchedule("test1", QTime(9, 0), QTime(11, 0), QTime(10, 0), QTime(10, 30)));
+    // Error: begin > end
+    QVERIFY(!wt.insertSchedule("test2", QTime(12, 0), QTime(11, 0), QTime(11, 30), QTime(11, 40)));
+    // Error: invalid begin
+    QVERIFY(!wt.insertSchedule("test3", QTime(), QTime(10, 0), QTime(9, 30), QTime(9, 40)));
+    // Error: invalid end
+    QVERIFY(!wt.insertSchedule("test3", QTime(10, 0), QTime(), QTime(9, 30), QTime(9, 40)));
+    // Error: begin == end
+    QVERIFY(!wt.insertSchedule("test4", QTime(10, 0), QTime(10, 0), QTime(10, 0), QTime(10, 0)));
+    // Error: invalid lunchBegin
+    QVERIFY(!wt.insertSchedule("test5", QTime(9, 30), QTime(11, 30), QTime(), QTime(10, 0)));
+    // Error: invalid lunchEnd
+    QVERIFY(!wt.insertSchedule("test6", QTime(9, 30), QTime(11, 30), QTime(9, 30), QTime()));
+    // Error: lunch time is out of schedule time boundaries
+    QVERIFY(!wt.insertSchedule("test7", QTime(9, 30), QTime(11, 30), QTime(12, 30), QTime(13, 0)));
+    QVERIFY(!wt.insertSchedule("test8", QTime(9, 30), QTime(11, 30), QTime(8, 30), QTime(10, 0)));
 
     QSqlQuery q("SELECT * FROM schedule", db);
 
     q.next();
+
     QCOMPARE(q.value(0).toString(), wt.defaultSchedule().name);
     QCOMPARE(q.value(1).toTime(), wt.defaultSchedule().begin);
     QCOMPARE(q.value(2).toTime(), wt.defaultSchedule().end);
+    QCOMPARE(q.value(3).toTime(), wt.defaultSchedule().lunchTimeBegin);
+    QCOMPARE(q.value(4).toTime(), wt.defaultSchedule().lunchTimeEnd);
 
     q.next();
     QCOMPARE(q.value(0).toString(), QString("test1"));
     QCOMPARE(q.value(1).toTime(), QTime(9, 0));
     QCOMPARE(q.value(2).toTime(), QTime(11, 0));
+    QCOMPARE(q.value(3).toTime(), QTime(10, 0));
+    QCOMPARE(q.value(4).toTime(), QTime(10, 30));
 
     q.next();
-    QCOMPARE(q.value(0).toString(), QString("test5"));
+    QCOMPARE(q.value(0).toString(), QString("test1_1"));
     QCOMPARE(q.value(1).toTime(), QTime(9, 30));
     QCOMPARE(q.value(2).toTime(), QTime(11, 30));
+    QCOMPARE(q.value(3).toTime(), QTime(10, 30));
+    QCOMPARE(q.value(4).toTime(), QTime(11, 0));
 
     clear(&db);
 }
@@ -221,7 +148,7 @@ void TestWorktimeTracker::insertRecord()
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
-    wt.insertSchedule("test", QTime(10, 0), QTime(12, 0));
+    wt.insertSchedule("test", QTime(10, 0), QTime(12, 0), QTime(10, 30), QTime(11, 0));
 
     QVERIFY(wt.insertRecord(QDate(1996, 11, 26)));
     QVERIFY(!wt.insertRecord(QDate(1996, 11, 26))); // Error: The same as previous
@@ -262,7 +189,7 @@ void TestWorktimeTracker::getScheduleBeforeDate()
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
-    wt.insertSchedule("test", QTime(10, 0), QTime(12, 0));
+    wt.insertSchedule("test", QTime(10, 0), QTime(12, 0), QTime(10, 30), QTime(11, 0));
 
     wt.insertRecord(QDate::currentDate(), QTime(8, 0), QTime(15, 0), "test");
     wt.insertRecord(QDate::currentDate().addDays(1));
@@ -283,7 +210,7 @@ void TestWorktimeTracker::getSchedule()
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
-    wt.insertSchedule("test", QTime(10, 0), QTime(12, 0));
+    wt.insertSchedule("test", QTime(10, 0), QTime(12, 0), QTime(10, 30), QTime(11, 0));
 
     auto sch1 = wt.getSchedule("test");
     QCOMPARE(sch1.name, "test");
@@ -306,7 +233,7 @@ void TestWorktimeTracker::setSchedule()
     QSqlDatabase db = createDb();
     WorktimeTracker wt(db);
 
-    wt.insertSchedule("test", QTime(10, 0), QTime(12, 0));
+    wt.insertSchedule("test", QTime(10, 0), QTime(12, 0), QTime(10, 30), QTime(11, 0));
 
     for (int i = 0; i < 4; ++i)
         wt.insertRecord(QDate::currentDate().addDays(i));
@@ -613,7 +540,7 @@ void TestWorktimeTracker::getSummary()
     QCOMPARE(wt.getSummary(QDate(1996, 2, 16), QDate(1996, 3, 19)).seconds, 0);
 
     // Custom schedule
-    wt.insertSchedule("custom", QTime(10, 0), QTime(12, 0));
+    wt.insertSchedule("custom", QTime(10, 0), QTime(12, 0), QTime(10, 30), QTime(11, 0));
     wt.setSchedule("custom", QDate(1996, 3, 3), QDate(1996, 3, 4));
     wt.setCheckIn(QTime(10, 30), QDate(1996, 3, 3));
     wt.setCheckOut(QTime(12, 0), QDate(1996, 3, 3));
@@ -652,7 +579,7 @@ void TestWorktimeTracker::getSummary_leavepass()
     QCOMPARE(wt.getSummary(1, 1996).seconds, -1.5*hourInSec);
 
     // Custom schedule
-    wt.insertSchedule("custom", QTime(10, 0), QTime(12, 0));
+    wt.insertSchedule("custom", QTime(10, 0), QTime(12, 0), QTime(10, 30), QTime(11, 0));
     wt.setSchedule("custom", QDate(1996, 3, 3));
     wt.setCheckIn(QTime(10, 0), QDate(1996, 3, 3));
     wt.setCheckOut(QTime(12, 0), QDate(1996, 3, 3));

@@ -5,11 +5,7 @@
 #include <QDateTime>
 #include "helper.h"
 
-// TODO:
-// rename:
-// leave pass -> debt
-// arrival time -> check in
-// leaving time -> check out
+// TODO: add method variants with TimeSpan, TimeRange
 
 class WorktimeTracker
 {
@@ -18,8 +14,10 @@ public:
     {
         QString name;
         QTime   begin, end;
+        QTime   lunchTimeBegin, lunchTimeEnd;
         bool    isValid() const;
         QString toString() const;
+        bool    operator==(const Schedule& s);
     };
     struct LeavePass
     {
@@ -41,7 +39,9 @@ public:
 
     WorktimeTracker(const QSqlDatabase& db,
                     const QTime& scheduleBegin = QTime(8, 0),
-                    const QTime& scheduleEnd = QTime(17, 0));
+                    const QTime& scheduleEnd = QTime(17, 0),
+                    const QTime& lunchBegin = QTime(12, 0),
+                    const QTime& lunchEnd = QTime(13,0));
 
     TimeSpan getSummary(const QDate& from, const QDate& to = QDate()) const;
     TimeSpan getSummary(int month, int year = -1);
@@ -50,8 +50,8 @@ public:
     QList<Record> getRecords(const QDate& from, const QDate& to) const;
 
     bool insertRecord(const QDate& date,
-                      const QTime& arrival,
-                      const QTime& leaving,
+                      const QTime& checkIn,
+                      const QTime& checkOut,
                       const QString& schedule = DEFAULT_SCHEDULE_NAME);
     bool insertRecord(const QDate& date);
 
@@ -59,7 +59,11 @@ public:
     Schedule getScheduleBeforeDate(const QDate& date) const;
     Schedule getSchedule(const QString& type) const;
     bool setSchedule(const QString& schedule, const QDate& from, const QDate& to = QDate());
-    bool insertSchedule(const QString& schedule, const QTime& begin, const QTime& end);
+    bool insertSchedule(const QString& schedule,
+                        const QTime& begin,
+                        const QTime& end,
+                        const QTime& lunchBegin,
+                        const QTime& lunchEnd);
 
     bool setCheckIn(const QTime& time = QTime(), const QDate& from = QDate(), const QDate& to = QDate());
     bool setCheckOut(const QTime& time = QTime(), const QDate& from = QDate(), const QDate& to = QDate());

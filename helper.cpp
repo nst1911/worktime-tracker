@@ -56,7 +56,12 @@ bool TimeRange::isInverted() const
 
 bool TimeRange::intersects(const TimeRange &range) const
 {
-    return end >= range.begin/* || begin <= range.end*/;
+    return intersects(*this, range);
+}
+
+bool TimeRange::contains(const TimeRange &range) const
+{
+    return contains(*this, range);
 }
 
 bool TimeRange::inverted(const QTime &begin, const QTime &end)
@@ -71,12 +76,24 @@ bool TimeRange::inverted(const TimeRange &range)
 
 bool TimeRange::valid(const QTime &begin, const QTime &end)
 {
-    return begin.isValid() && end.isValid() && begin < end;
+    return begin.isValid() && end.isValid() && begin != end;
 }
 
 bool TimeRange::valid(const TimeRange &range)
 {
     return valid(range.begin, range.end);
+}
+
+bool TimeRange::intersects(const TimeRange &t1, const TimeRange &t2)
+{
+    return t1.isValid() && t2.isValid() ? t1.end >= t2.begin/* || t1.begin <= t2.end*/ : false;
+}
+
+bool TimeRange::contains(const TimeRange &t1, const TimeRange &t2)
+{
+    return t1.isValid() && t2.isValid()
+            ? (t2.begin >= t1.begin && t2.begin <= t1.end) && (t2.end <= t1.end && t2.end >= t1.begin)
+            : false;
 }
 
 TimeRange::TimeRange()

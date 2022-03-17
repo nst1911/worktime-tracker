@@ -6,16 +6,25 @@
 #include <QDebug>
 #include <QSqlRecord>
 
-WorktimeTracker::WorktimeTracker(const QSqlDatabase &db, const QTime &scheduleBegin, const QTime &scheduleEnd)
+WorktimeTracker::WorktimeTracker(const QSqlDatabase &db, const QTime &scheduleBegin, const QTime &scheduleEnd, const QTime &lunchBegin, const QTime &lunchEnd)
     : m_db(db)
 {
     // TODO: Using Q_ASSERT for checking db and time is not safe. It'd be better to hide constructor
     // in private/protected area and create WorktimeTracker instances via static method like
     // WorktimeTracker::create()
 
-    Q_ASSERT(m_db.isOpen() && scheduleBegin.isValid() && scheduleEnd.isValid());
+    Q_ASSERT(m_db.isOpen());
 
-    m_defaultSchedule = { DEFAULT_SCHEDULE_NAME, scheduleBegin, scheduleEnd };
+    // Use temp schedule object to check if time arguments are valid
+    Schedule temp = { DEFAULT_SCHEDULE_NAME,
+                      scheduleBegin,
+                      scheduleEnd,
+                      lunchBegin,
+                      lunchEnd };
+
+    Q_ASSERT(temp.isValid());
+
+    m_defaultSchedule = temp;
 
     initScheduleTable();
     initLeavepassTable();
@@ -166,24 +175,27 @@ QList<WorktimeTracker::Record> WorktimeTracker::getRecords(const QDate &from, co
     return records;
 }
 
-bool WorktimeTracker::insertRecord(const QDate &date, const QTime &arrival, const QTime &leaving, const QString &schedule)
+bool WorktimeTracker::insertRecord(const QDate &date, const QTime &checkIn, const QTime &checkOut, const QString &schedule)
 {
     if (schedule.isEmpty() || !date.isValid())
         return false;
 
     // If there is no schedule with this name
+
+    auto s = getSchedule(schedule);
+
     if (schedule != defaultSchedule().name && !getSchedule(schedule).isValid())
         return false;
 
-    if (!TimeRange::valid(arrival, leaving) || TimeRange::inverted(arrival, leaving))
+    if (!TimeRange::valid(checkIn, checkOut) || TimeRange::inverted(checkIn, checkOut))
         return false;
 
     QSqlQuery query(m_db);
     query.prepare("INSERT INTO worktime VALUES (:d, :schedule, :arrival, :leaving)");
     query.bindValue(":d", dateToString(date));
     query.bindValue(":schedule", schedule);
-    query.bindValue(":arrival", timeToString(arrival));
-    query.bindValue(":leaving", timeToString(leaving));
+    query.bindValue(":arrival", timeToString(checkIn));
+    query.bindValue(":leaving", timeToString(checkOut));
 
     return execQueryVerbosely(&query);
 }
@@ -208,22 +220,30 @@ bool WorktimeTracker::setSchedule(const QString &schedule, const QDate &from, co
     return updateColumnData("worktime", "Schedule", _from, _to, schedule);
 }
 
-bool WorktimeTracker::insertSchedule(const QString &schedule, const QTime &begin, const QTime &end)
+bool WorktimeTracker::insertSchedule(const QString &name, const QTime &begin, const QTime &end, const QTime &lunchBegin, const QTime &lunchEnd)
 {
-    // TODO: begin must be lower than end
+    if (name.isEmpty())
+        return false;
 
-    if (schedule.isEmpty() || !TimeRange::valid(begin, end) || TimeRange::inverted(begin, end))
+    TimeRange schedule(begin, end);
+    TimeRange lunch(lunchBegin, lunchEnd);
+
+    if (!schedule.isValid() || schedule.isInverted())
+        return false;
+
+    if (!lunch.isValid() || lunch.isInverted() || !schedule.contains(lunch))
         return false;
 
     QSqlQuery query(m_db);
 
-    query.prepare("INSERT INTO schedule VALUES(:schedule,:begin,:end)");
-    query.bindValue(":schedule", schedule);
+    query.prepare("INSERT INTO schedule VALUES(:schedule,:begin,:end,:lunchBegin,:lunchEnd)");
+    query.bindValue(":schedule", name);
     query.bindValue(":begin", timeToString(begin));
     query.bindValue(":end", timeToString(end));
+    query.bindValue(":lunchBegin", timeToString(lunchBegin));
+    query.bindValue(":lunchEnd", timeToString(lunchEnd));
     return execQueryVerbosely(&query);
 }
-
 
 bool WorktimeTracker::setCheckIn(const QTime &time, const QDate &from, const QDate &to)
 {
@@ -385,13 +405,17 @@ void WorktimeTracker::initScheduleTable()
     execQueryVerbosely(&query, "CREATE TABLE schedule ("
                                "    Name TEXT PRIMARY KEY NOT NULL,"
                                "    Begin TEXT,"
-                               "    End TEXT"
+                               "    End TEXT,"
+                               "    LunchTimeBegin TEXT,"
+                               "    LunchTimeEnd   TEXT"
                                ")");
 
-    query.prepare("INSERT INTO schedule VALUES(:name,:begin,:end)");
+    query.prepare("INSERT INTO schedule VALUES(:name,:begin,:end,:lunchBegin,:lunchEnd)");
     query.bindValue(":name", m_defaultSchedule.name);
     query.bindValue(":begin", timeToString(m_defaultSchedule.begin));
     query.bindValue(":end", timeToString(m_defaultSchedule.end));
+    query.bindValue(":lunchBegin", timeToString(m_defaultSchedule.lunchTimeBegin));
+    query.bindValue(":lunchEnd", timeToString(m_defaultSchedule.lunchTimeEnd));
     execQueryVerbosely(&query);
 
 //    query.prepare("INSERT INTO schedule VALUES('floating_first_hour',:begin,:end)");
@@ -466,6 +490,8 @@ WorktimeTracker::Schedule WorktimeTracker::getSchedule(const QString &name) cons
     s.name = query.value("Name").toString();
     s.begin = stringToTime(query.value("Begin").toString());
     s.end = stringToTime(query.value("End").toString());
+    s.lunchTimeBegin = stringToTime(query.value("LunchTimeBegin").toString());
+    s.lunchTimeEnd = stringToTime(query.value("LunchTimeEnd").toString());
     return s;
 }
 
@@ -488,12 +514,30 @@ WorktimeTracker::Schedule WorktimeTracker::getScheduleBeforeDate(const QDate &da
 
 bool WorktimeTracker::Schedule::isValid() const
 {
-    return !name.isEmpty() && begin.isValid() && end.isValid();
+    TimeRange scheduleTime(begin, end);
+    TimeRange lunchTime(lunchTimeBegin, lunchTimeEnd);
+
+    return  !name.isEmpty() &&
+            scheduleTime.isValid() && lunchTime.isValid() &&
+            !scheduleTime.isInverted() && !lunchTime.isInverted() &&
+            scheduleTime.contains(lunchTime);
 }
 
 QString WorktimeTracker::Schedule::toString() const
 {
-    return QString("schedule name=%1, begin=%2, end=%3").arg(name).arg(begin.toString()).arg(end.toString());
+    return QString("schedule name=%1, begin=%2, end=%3, lunchTimeBegin=%4, lunchTimeEnd=%5")
+            .arg(name)
+            .arg(begin.toString())
+            .arg(end.toString())
+            .arg(lunchTimeBegin.toString())
+            .arg(lunchTimeEnd.toString());
+}
+
+bool WorktimeTracker::Schedule::operator==(const WorktimeTracker::Schedule &s)
+{
+    return name == s.name &&
+           begin == s.begin && end == s.end &&
+           lunchTimeBegin == s.lunchTimeBegin && lunchTimeEnd == s.lunchTimeEnd;
 }
 
 bool WorktimeTracker::LeavePass::isValid() const

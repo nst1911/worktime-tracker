@@ -12,12 +12,14 @@ SOURCES += \
     helper.cpp \
     main.cpp \
     mainwindow.cpp \
+    testhelper.cpp \
     testworktimetracker.cpp \
     worktimetracker.cpp
 
 HEADERS += \
     helper.h \
     mainwindow.h \
+    testhelper.h \
     testworktimetracker.h \
     worktimetracker.h
 

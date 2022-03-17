@@ -1,11 +1,15 @@
 #include "mainwindow.h"
 #include "testworktimetracker.h"
+#include "testhelper.h"
 
 #include <QApplication>
 
 void test()
 {
     QStringList args = {"", "-silent"};
+
+    TestHelper testHelper;
+    QTest::qExec(&testHelper, args);
 
     TestWorktimeTracker testWorktimeTracker;
     QTest::qExec(&testWorktimeTracker, args);
