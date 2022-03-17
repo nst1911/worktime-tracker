@@ -27,10 +27,10 @@ private slots:
     void getScheduleBeforeDate();
     void getSchedule();
     void setSchedule();
-    void setArrivalTime();
-    void setLeavingTime();
-    void getLeavePassList();
+    void setCheckIn();
+    void setCheckOut();
     void insertLeavePass();
+    void getLeavePassList();
     void setLeavePassBegin();
     void setLeavePassEnd();
     void setLeavePassComment();

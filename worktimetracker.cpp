@@ -60,19 +60,19 @@ TimeSpan WorktimeTracker::getSummary(const QDate &from, const QDate &to) const
 
         // TODO: exclude lunch time
 
-        auto arrivalTime = query.value("ArrivalTime").toTime();
+        auto checkIn = query.value("CheckIn").toTime();
 
-        if (arrivalTime > schedule.begin)
-            debtList.append(TimeRange(schedule.begin, arrivalTime));
+        if (checkIn > schedule.begin)
+            debtList.append(TimeRange(schedule.begin, checkIn));
         else
-            overtimeList.append(TimeRange(arrivalTime, schedule.begin));
+            overtimeList.append(TimeRange(checkIn, schedule.begin));
 
-        auto leavingTime = query.value("LeavingTime").toTime();
+        auto checkOut = query.value("CheckOut").toTime();
 
-        if (schedule.end > leavingTime)
-            debtList.append(TimeRange(leavingTime, schedule.end));
+        if (schedule.end > checkOut)
+            debtList.append(TimeRange(checkOut, schedule.end));
         else
-            overtimeList.append(TimeRange(schedule.end, leavingTime));
+            overtimeList.append(TimeRange(schedule.end, checkOut));
 
         // Fill debt and overtime lists by calculating leave passes
 
@@ -126,8 +126,8 @@ WorktimeTracker::Record WorktimeTracker::getRecord(const QDate &date) const
     Record r;
     r.schedule = getSchedule(query.value("Schedule").toString());
     r.date = query.value("Date").toDate();
-    r.arrivalTime = query.value("ArrivalTime").toTime();
-    r.leavingTime = query.value("LeavingTime").toTime();
+    r.checkIn = query.value("CheckIn").toTime();
+    r.checkOut = query.value("CheckOut").toTime();
 
     return r;
 }
@@ -158,8 +158,8 @@ QList<WorktimeTracker::Record> WorktimeTracker::getRecords(const QDate &from, co
         Record r;
         r.schedule = getSchedule(query.value("Schedule").toString());
         r.date = query.value("Date").toDate();
-        r.arrivalTime = query.value("ArrivalTime").toTime();
-        r.leavingTime = query.value("LeavingTime").toTime();
+        r.checkIn = query.value("CheckIn").toTime();
+        r.checkOut = query.value("CheckOut").toTime();
         records.append(r);
     }
 
@@ -225,7 +225,7 @@ bool WorktimeTracker::insertSchedule(const QString &schedule, const QTime &begin
 }
 
 
-bool WorktimeTracker::setArrivalTime(const QTime &time, const QDate &from, const QDate &to)
+bool WorktimeTracker::setCheckIn(const QTime &time, const QDate &from, const QDate &to)
 {
     if (!time.isValid())
         return false;
@@ -234,17 +234,15 @@ bool WorktimeTracker::setArrivalTime(const QTime &time, const QDate &from, const
     auto _to   = to.isValid() ? to : _from;
 
     return updateColumnData("worktime",
-                            "ArrivalTime",
+                            "CheckIn",
                             _from,
                             _to,
                             timeToString(time),
-                            "LeavingTime >= time(:data)");
+                            "CheckOut >= time(:data)");
 }
 
-bool WorktimeTracker::setLeavingTime(const QTime &time, const QDate &from, const QDate &to)
+bool WorktimeTracker::setCheckOut(const QTime &time, const QDate &from, const QDate &to)
 {
-    // TODO: time must be higher than ArrivalTime
-
     if (!time.isValid())
         return false;
 
@@ -252,11 +250,11 @@ bool WorktimeTracker::setLeavingTime(const QTime &time, const QDate &from, const
     auto _to   = to.isValid() ? to : _from;
 
     return updateColumnData("worktime",
-                            "LeavingTime",
+                            "CheckOut",
                             _from,
                             _to,
                             timeToString(time),
-                            "ArrivalTime <= time(:data)");
+                            "CheckIn <= time(:data)");
 }
 
 QList<WorktimeTracker::LeavePass> WorktimeTracker::getLeavePassList(const QDate &date) const
@@ -276,8 +274,8 @@ QList<WorktimeTracker::LeavePass> WorktimeTracker::getLeavePassList(const QDate 
         LeavePass lp;
         lp.date    = stringToDate(query.value("Date").toString());
         lp.id      = query.value("Id").toInt();
-        lp.from    = stringToTime(query.value("TimeFrom").toString());
-        lp.to      = stringToTime(query.value("TimeTo").toString());
+        lp.from    = stringToTime(query.value("Begin").toString());
+        lp.to      = stringToTime(query.value("End").toString());
         lp.comment = query.value("Comment").toString();
         leavePassList.append(lp);
     }
@@ -327,20 +325,20 @@ bool WorktimeTracker::insertLeavePass(const QTime &from, const QTime &to, const 
 
 bool WorktimeTracker::setLeavePassBegin(const QTime &time, const QDate &date, int id)
 {
-    // TODO: time must be lower than TimeTo
+    if (!time.isValid())
+        return false;
 
-    auto _time = time.isValid() ? time : QTime::currentTime();
     auto _date = date.isValid() ? date : QDate::currentDate();
-    return updateLeavePassData("TimeFrom", _date, id, timeToString(_time), "TimeTo >= time(:data)");
+    return updateLeavePassData("Begin", _date, id, timeToString(time), "End >= time(:data)");
 }
 
 bool WorktimeTracker::setLeavePassEnd(const QTime &time, const QDate &date, int id)
 {
-    // TODO: time must be higher than TimeFrom
+    if (!time.isValid())
+        return false;
 
-    auto _time = time.isValid() ? time : QTime::currentTime();
     auto _date = date.isValid() ? date : QDate::currentDate();
-    return updateLeavePassData("TimeTo", _date, id, timeToString(_time), "TimeFrom <= time(:data)");
+    return updateLeavePassData("End", _date, id, timeToString(time), "Begin <= time(:data)");
 }
 
 bool WorktimeTracker::setLeavePassComment(const QString &comment, const QDate &date, int id)
@@ -361,8 +359,8 @@ void WorktimeTracker::initWorktimeTable()
     execQueryVerbosely(&query, "CREATE TABLE worktime ("
                                "    Date TEXT PRIMARY KEY NOT NULL,"
                                "    Schedule TEXT,"
-                               "    ArrivalTime TEXT,"
-                               "    LeavingTime TEXT"
+                               "    CheckIn TEXT,"
+                               "    CheckOut TEXT"
                                ")");
 }
 
@@ -373,8 +371,8 @@ void WorktimeTracker::initLeavepassTable()
     execQueryVerbosely(&query, "CREATE TABLE leavepass ("
                                "    Date TEXT NOT NULL,"
                                "    Id INT,"
-                               "    TimeFrom TEXT,"
-                               "    TimeTo TEXT,"
+                               "    Begin TEXT,"
+                               "    End TEXT,"
                                "    Comment TEXT,"
                                "    PRIMARY KEY (Date, Id)"
                                ")");
@@ -382,7 +380,6 @@ void WorktimeTracker::initLeavepassTable()
 
 void WorktimeTracker::initScheduleTable()
 {
-
     QSqlQuery query(m_db);
 
     execQueryVerbosely(&query, "CREATE TABLE schedule ("
@@ -516,14 +513,14 @@ QString WorktimeTracker::LeavePass::toString() const
 
 bool WorktimeTracker::Record::isValid() const
 {
-    return date.isValid() && schedule.isValid() && arrivalTime.isValid() && leavingTime.isValid();
+    return date.isValid() && schedule.isValid() && checkIn.isValid() && checkOut.isValid();
 }
 
 QString WorktimeTracker::Record::toString() const
 {
-    return QString("worktime date=%1, schedule={%2}, arrivalTime=%3, leavingTime=%4")
+    return QString("worktime date=%1, schedule={%2}, checkIn=%3, checkOut=%4")
             .arg(date.toString())
             .arg(schedule.toString())
-            .arg(arrivalTime.toString())
-            .arg(leavingTime.toString());
+            .arg(checkIn.toString())
+            .arg(checkOut.toString());
 }

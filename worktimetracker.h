@@ -34,7 +34,7 @@ public:
     {
         QDate    date;
         Schedule schedule;
-        QTime    arrivalTime, leavingTime;
+        QTime    checkIn, checkOut;
         bool     isValid() const;
         QString  toString() const;
     };
@@ -61,8 +61,8 @@ public:
     bool setSchedule(const QString& schedule, const QDate& from, const QDate& to = QDate());
     bool insertSchedule(const QString& schedule, const QTime& begin, const QTime& end);
 
-    bool setArrivalTime(const QTime& time = QTime(), const QDate& from = QDate(), const QDate& to = QDate());
-    bool setLeavingTime(const QTime& time = QTime(), const QDate& from = QDate(), const QDate& to = QDate());
+    bool setCheckIn(const QTime& time = QTime(), const QDate& from = QDate(), const QDate& to = QDate());
+    bool setCheckOut(const QTime& time = QTime(), const QDate& from = QDate(), const QDate& to = QDate());
 
     QList<LeavePass> getLeavePassList(const QDate& date) const;
     bool insertLeavePass(const QTime& from, const QTime& to, const QDate& date = QDate(), const QString& comment = QString());
