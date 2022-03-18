@@ -3,8 +3,8 @@
 void TestHelper::timeRange_valid()
 {
     QVERIFY(TimeRange(8,0, 8,30).isValid());
-    // Inverted order of range but ok
-    QVERIFY(TimeRange(12,0, 8,30).isValid());
+    // Error: Inverted order of range
+    QVERIFY(!TimeRange(12,0, 8,30).isValid());
     // Error: Invalid time
     QVERIFY(!TimeRange(-1, 2, 3, 0).isValid());
     QVERIFY(!TimeRange(QTime(), QTime(8, 0)).isValid());
@@ -21,11 +21,11 @@ void TestHelper::timeRange_inverted()
 
 void TestHelper::timeRange_intersects()
 {
-    QVERIFY(TimeRange(8,0, 8,30).intersects(TimeRange(8,30, 9,0)));
     QVERIFY(TimeRange(8,0, 8,30).intersects(TimeRange(8,15, 9,0)));
-    QVERIFY(TimeRange(8,0, 8,30).intersects(TimeRange(7,15, 8,0)));
     QVERIFY(TimeRange(8,0, 8,30).intersects(TimeRange(7,15, 8,15)));
     QVERIFY(!TimeRange(8,0, 8,30).intersects(TimeRange(9,30, 10,0)));
+    QVERIFY(TimeRange(8,0, 8,30).intersects(TimeRange(8,30, 9,0)));
+    QVERIFY(TimeRange(8,0, 8,30).intersects(TimeRange(7,15, 8,0)));
     // Error: Invalid time ranges
     QVERIFY(!TimeRange().intersects(TimeRange(9,30, 10,0)));
     QVERIFY(!TimeRange(8,0, 8,30).intersects(TimeRange()));
@@ -36,9 +36,9 @@ void TestHelper::timeRange_contains()
     QVERIFY(TimeRange(8,0, 8,30).contains(TimeRange(8,0, 8,10)));
     QVERIFY(TimeRange(8,0, 8,30).contains(TimeRange(8,10, 8,30)));
     QVERIFY(TimeRange(8,0, 8,30).contains(TimeRange(8,0, 8,30)));
+    QVERIFY(!TimeRange(8,0, 8,30).contains(TimeRange(7,15, 8,30)));
     // Intersects but not contains at all
     QVERIFY(!TimeRange(8,0, 8,30).contains(TimeRange(8,15, 9,30)));
-    QVERIFY(!TimeRange(8,0, 8,30).contains(TimeRange(7,15, 8,30)));
     // Error: Invalid time ranges
     QVERIFY(!TimeRange(8,0, 8,30).contains(TimeRange()));
     QVERIFY(!TimeRange().contains(TimeRange(7,15, 8,30)));
@@ -134,6 +134,52 @@ void TestHelper::timeRange_unite_list()
     auto r7 = TimeRange::unite(l7);
     QCOMPARE(r7.size(), 1);
     QCOMPARE(r7[0], TimeRange(8,0, 8,50));
+}
+
+void TestHelper::timeRange_subtract()
+{
+    auto r1 = TimeRange::subtract(TimeRange(11,0, 14,0), TimeRange(12,0, 13,0));
+    QCOMPARE(r1.size(), 2);
+    QCOMPARE(r1[0], TimeRange(11,0, 12,0));
+    QCOMPARE(r1[1], TimeRange(13,0, 14,0));
+
+    auto r2 = TimeRange::subtract(TimeRange(11,0, 12,0), TimeRange(11,0, 12,30));
+    QCOMPARE(r2.size(), 1);
+    QCOMPARE(r2[0], TimeRange(12,0, 12,30));
+
+    auto r3 = TimeRange::subtract(TimeRange(11,0, 12,0), TimeRange(12,0, 13,0));
+    QCOMPARE(r3.size(), 2);
+    QCOMPARE(r3[0], TimeRange(11,0, 11,59));
+    QCOMPARE(r3[1], TimeRange(12,1, 13,0));
+
+    // Congruent ranges
+    auto r4 = TimeRange::subtract(TimeRange(11,0, 12,0), TimeRange(11,0, 12,0));
+    QCOMPARE(r4.size(), 1);
+    QVERIFY(!r4[0].isValid());
+
+    // Invalid ranges
+    auto r5 = TimeRange::subtract(TimeRange(), TimeRange(11,0, 12,0));
+    QCOMPARE(r5.size(), 1);
+    QCOMPARE(r5[0], TimeRange(11,0, 12,0));
+
+    auto r6 = TimeRange::subtract(TimeRange(11,0, 12,0), TimeRange());
+    QCOMPARE(r6.size(), 1);
+    QCOMPARE(r6[0], TimeRange(11,0, 12,0));
+
+    auto r7 = TimeRange::subtract(TimeRange(11,0, 11,0), TimeRange(11,0, 12,0));
+    QCOMPARE(r7.size(), 1);
+    QCOMPARE(r7[0], TimeRange(11,0, 12,0));
+
+    // Non-intersecting ranges
+    auto r8 = TimeRange::subtract(TimeRange(11,0, 12,0), TimeRange(13,0, 14,0));
+    QCOMPARE(r8.size(), 2);
+    QCOMPARE(r8[0], TimeRange(11,0, 12,0));
+    QCOMPARE(r8[1], TimeRange(13,0, 14,0));
+}
+
+void TestHelper::timeRange_subtract_list()
+{
+    QVERIFY2(false, "need to add tests");
 }
 
 void TestHelper::timeRange_equalOperator()

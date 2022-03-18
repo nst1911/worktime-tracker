@@ -6,6 +6,8 @@
 
 void test()
 {
+    // Comment argument -silent if you want to see
+    // all test output and debug messages (qDebug)
     QStringList args = {"", "-silent"};
 
     TestHelper testHelper;

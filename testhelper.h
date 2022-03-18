@@ -16,6 +16,8 @@ private slots:
     void timeRange_contains();
     void timeRange_unite();
     void timeRange_unite_list();
+    void timeRange_subtract();
+    void timeRange_subtract_list();
     void timeRange_equalOperator();
     void timeSpan_hoursMinutes();
 };

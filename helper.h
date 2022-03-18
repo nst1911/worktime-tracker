@@ -7,6 +7,9 @@
 
 struct TimeRange
 {
+    // TimeRange is open interval, that is [8:00 - 10:00], not (8:00 - 10:00)
+    // TODO: add possibility to make begin/end boundaries closed/open
+
     TimeRange();
     TimeRange(const QTime& _begin, const QTime& _end);
     TimeRange(int beginHour, int beginMinutes, int endHour, int endMinutes);
@@ -22,6 +25,9 @@ struct TimeRange
     bool intersects(const TimeRange& range) const;
     bool contains(const TimeRange& range) const;
 
+    QList<TimeRange> unite(const TimeRange& range);
+    QList<TimeRange> subtract(const TimeRange& range);
+
     static bool inverted(const QTime& begin, const QTime& end);
     static bool inverted(const TimeRange& range);
 
@@ -33,6 +39,12 @@ struct TimeRange
 
     static QList<TimeRange> unite(const TimeRange& r1, const TimeRange& r2);
     static QList<TimeRange> unite(const QList<TimeRange>& ranges);
+
+    static QList<TimeRange> subtract(const TimeRange& r1, const TimeRange& r2);
+    static QList<TimeRange> subtract(const QList<TimeRange>& ranges);
+
+private:
+    static constexpr int MIN_TIME_UNIT_MSECS = 1 * 60 * 1000; // Minute
 };
 
 inline bool operator==(const TimeRange& r1, const TimeRange& r2) {

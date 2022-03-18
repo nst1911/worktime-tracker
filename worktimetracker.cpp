@@ -56,8 +56,6 @@ TimeSpan WorktimeTracker::getSummary(const QDate &from, const QDate &to) const
     {
         auto date = query.value("Date").toDate();
 
-        qDebug() << date;
-
         auto schedule = getSchedule(query.value("Schedule").toString());
         if (!schedule.isValid())
             return TimeSpan();
@@ -228,10 +226,10 @@ bool WorktimeTracker::insertSchedule(const QString &name, const QTime &begin, co
     TimeRange schedule(begin, end);
     TimeRange lunch(lunchBegin, lunchEnd);
 
-    if (!schedule.isValid() || schedule.isInverted())
+    if (!schedule.isValid())
         return false;
 
-    if (!lunch.isValid() || lunch.isInverted() || !schedule.contains(lunch))
+    if (!lunch.isValid() || !schedule.contains(lunch))
         return false;
 
     QSqlQuery query(m_db);
@@ -519,7 +517,6 @@ bool WorktimeTracker::Schedule::isValid() const
 
     return  !name.isEmpty() &&
             scheduleTime.isValid() && lunchTime.isValid() &&
-            !scheduleTime.isInverted() && !lunchTime.isInverted() &&
             scheduleTime.contains(lunchTime);
 }
 
